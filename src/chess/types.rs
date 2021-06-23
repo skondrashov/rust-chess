@@ -96,7 +96,7 @@ pub mod file_rank {
 pub type Square = u8;
 
 pub mod piece_color {
-    pub type Type = u8;
+    pub type Type = super::Square;
 
     pub const NONE: Type = 0b00000000;
     pub const WHITE: Type = 0b10000000;
@@ -105,7 +105,7 @@ pub mod piece_color {
 }
 
 pub mod piece_type {
-    pub type Type = u8;
+    pub type Type = super::Square;
 
     pub const NONE: Type = 0b00000000;
     pub const PAWN: Type = 0b00100000;
@@ -121,9 +121,9 @@ pub mod piece {
     use super::piece_color;
     use super::piece_type;
 
-    pub type Type = u8;
+    pub type Type = super::Square;
 
-    pub const NONE: Type = 0b00000000;
+    pub const NONE: Type = piece_color::NONE | piece_type::NONE;
     pub const WHITE_PAWN: Type = piece_color::WHITE | piece_type::PAWN;
     pub const WHITE_KNIGHT: Type = piece_color::WHITE | piece_type::KNIGHT;
     pub const WHITE_BISHOP: Type = piece_color::WHITE | piece_type::BISHOP;
@@ -138,40 +138,36 @@ pub mod piece {
     pub const BLACK_KING: Type = piece_color::BLACK | piece_type::KING;
 }
 
-pub type Flags = u16;
+pub type CastleMoveFlags = u8;
 
-pub mod castle_flags {
-    pub type Type = u16;
+pub mod move_castle_flags {
+    pub type Type = super::CastleMoveFlags;
 
-    pub const NO_CASTLE: Type = 0x0000;
-    pub const WHITE_LONG_CASTLE: Type = 0x0010;
-    pub const WHITE_SHORT_CASTLE: Type = 0x0020;
-    pub const BLACK_LONG_CASTLE: Type = 0x0040;
-    pub const BLACK_SHORT_CASTLE: Type = 0x0080;
-    pub const FLAGS_CASTLE_MASK: Type = 0x00F0;
+    pub const NO_CASTLE: Type = 0b00000000;
+    pub const WHITE_LONG_CASTLE: Type = 0b10000000;
+    pub const WHITE_SHORT_CASTLE: Type = 0b01000000;
+    pub const BLACK_LONG_CASTLE: Type = 0b00100000;
+    pub const BLACK_SHORT_CASTLE: Type = 0b00010000;
+    pub const FLAGS_CASTLE_MASK: Type = 0b11110000;
+    pub const MOVE_FLAG_MASK: Type = 0b00001100;
+    pub const WHITE_MOVE_FLAGS_MASK: Type = 0b00001000;
+    pub const BLACK_MOVE_FLAGS_MASK: Type = 0b00000100;
 }
+
+pub type EnPassantFlags = u8;
 
 pub mod en_passant_flags {
-    pub type Type = u16;
+    pub type Type = super::EnPassantFlags;
 
-    pub const NO_EN_PASSANT: Type = 0x0000;
-    pub const A: Type = 0x1000;
-    pub const B: Type = 0x2000;
-    pub const C: Type = 0x4000;
-    pub const D: Type = 0x8000;
-    pub const E: Type = 0x0100;
-    pub const F: Type = 0x0200;
-    pub const G: Type = 0x0400;
-    pub const H: Type = 0x0800;
-    pub const FLAGS_EN_PASSANT_MASK: Type = 0xFF00;
-}
-
-pub mod to_move_flags {
-    pub type Type = u16;
-
-    pub const WHITE: Type = 0x0000;
-    pub const BLACK: Type = 0x0001;
-    pub const FLAGS_TO_MOVE_MASK: Type = 0x000F;
+    pub const NO_EN_PASSANT: Type = 0b00000000;
+    pub const A: Type = 0b10000000;
+    pub const B: Type = 0b01000000;
+    pub const C: Type = 0b00100000;
+    pub const D: Type = 0b00010000;
+    pub const E: Type = 0b00001000;
+    pub const F: Type = 0b00000100;
+    pub const G: Type = 0b00000010;
+    pub const H: Type = 0b00000001;
 }
 
 pub type Move = u64;

@@ -1,6 +1,6 @@
 use super::types;
 
-pub const ALL_SQUARES_NUM: usize = 64;
+pub const ALL_SQUARES_SIZE: usize = 64;
 
 pub const FILE_SIZE: usize = 8;
 pub const RANK_SIZE: usize = 8;

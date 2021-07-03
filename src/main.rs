@@ -1,7 +1,11 @@
 mod chess;
+mod constants;
 mod nnue;
 
-use nnue::{Nnue, INPUTS, OUTPUTS};
+use {
+    constants::{INPUTS, OUTPUTS},
+    nnue::Nnue,
+};
 
 const T: u8 = 1;
 const F: u8 = 0;

@@ -1,7 +1,5 @@
 // https://github.com/asdfjkl/nnue/blob/main/nnue_en.pdf
-
-pub const INPUTS: usize = 8 * 8 * 8; // + 13;
-pub const OUTPUTS: usize = 512;
+use crate::constants::{INPUTS, OUTPUTS};
 
 pub struct Nnue {
    pub biases: [f32; OUTPUTS],

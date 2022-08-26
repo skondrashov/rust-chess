@@ -3,12 +3,10 @@ pub mod constants;
 use {
 	crate::chess::{
 		constants::{
-			pieces::{BLACK_ROOK, EMPTY_SQUARE, WHITE_ROOK},
+			pieces::{BLACK_ROOK, WHITE_ROOK},
 			BOARD_SIZE, STARTING_BOARD,
 		},
-		Chess,
-		Color::*,
-		Move, Result, Square, SquareProperties,
+		Chess, Move, Square, SquareProperties,
 	},
 	constants::*,
 };
@@ -72,8 +70,8 @@ impl Network {
 
 	pub fn evaluate(&mut self, move_: Option<&Move>) -> f32 {
 		let old_cache = if let Some(move_) = move_ {
-			let old_cache = self.nnue.output_cache.clone();
-			self.update_cache(&move_);
+			let old_cache = self.nnue.output_cache;
+			self.update_cache(move_);
 			Some(old_cache)
 		} else {
 			None
@@ -97,8 +95,7 @@ impl Network {
 	}
 
 	pub fn move_evaluations(&mut self, game: &Chess) -> Vec<(f32, Move)> {
-		game
-			.moves()
+		game.moves()
 			.into_iter()
 			.map(|move_| (self.evaluate(Some(&move_)), move_))
 			.collect()
@@ -106,7 +103,7 @@ impl Network {
 
 	pub fn policy(&mut self, game: &Chess) -> Vec<(f32, Move)> {
 		let mut moves = self.move_evaluations(game);
-		moves.sort_by(|(eval1, _), (eval2, _)| eval1.partial_cmp(&eval2).unwrap());
+		moves.sort_by(|(eval1, _), (eval2, _)| eval1.partial_cmp(eval2).unwrap());
 		moves
 	}
 
@@ -139,33 +136,33 @@ impl Network {
 		}
 	}
 
-	pub fn playout(&mut self, mut game: Chess) -> Result {
-		loop {
-			if let Some(result) = game.result() {
-				return result;
-			}
-			let move_ = self
-				.move_evaluations(&game)
-				.into_iter()
-				.max_by(|(eval1, _), (eval2, _)| eval1.partial_cmp(&eval2).unwrap())
-				.unwrap()
-				.1;
+	// pub fn playout(&mut self, mut game: Chess) -> Result {
+	// 	loop {
+	// 		if let Some(result) = game.result() {
+	// 			return result;
+	// 		}
+	// 		let move_ = self
+	// 			.move_evaluations(&game)
+	// 			.into_iter()
+	// 			.max_by(|(eval1, _), (eval2, _)| eval1.partial_cmp(eval2).unwrap())
+	// 			.unwrap()
+	// 			.1;
 
-			self.input[move_.from] = EMPTY_SQUARE;
-			self.input[move_.to.0] = move_.to.1;
-			if let Some(clear_square) = move_.clear_square {
-				self.input[clear_square] = EMPTY_SQUARE;
-			}
-			if let Some(rook_square) = move_.rook_square {
-				self.input[rook_square] = if game.to_play == WHITE {
-					WHITE_ROOK
-				} else {
-					BLACK_ROOK
-				};
-			}
+	// 		self.input[move_.from] = EMPTY_SQUARE;
+	// 		self.input[move_.to.0] = move_.to.1;
+	// 		if let Some(clear_square) = move_.clear_square {
+	// 			self.input[clear_square] = EMPTY_SQUARE;
+	// 		}
+	// 		if let Some(rook_square) = move_.rook_square {
+	// 			self.input[rook_square] = if game.to_play == WHITE {
+	// 				WHITE_ROOK
+	// 			} else {
+	// 				BLACK_ROOK
+	// 			};
+	// 		}
 
-			game.update_pieces(&move_);
-			self.update_cache(&move_);
-		}
-	}
+	// 		game.update_pieces(&move_);
+	// 		self.update_cache(&move_);
+	// 	}
+	// }
 }

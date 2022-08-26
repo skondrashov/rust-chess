@@ -5,7 +5,7 @@ pub const BOARD_SIZE: usize = 64;
 #[rustfmt::skip]
 #[allow(non_upper_case_globals)]
 pub mod pieces {
-use super::SQUARE_FEATURES;
+ 	use super::SQUARE_FEATURES;
 
 	const o: bool = false;
 	const X: bool = true;

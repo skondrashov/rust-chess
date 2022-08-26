@@ -7,6 +7,7 @@ use {
 	constants::{pieces::*, *},
 	std::{
 		collections::{HashMap, HashSet},
+		fmt::{Debug, Display},
 		iter::FromIterator,
 		vec,
 	},
@@ -50,20 +51,10 @@ pub struct Move {
 	pub rook_square: Option<usize>,
 }
 
-impl Move {
-	pub fn new(from: usize, to: usize, piece: Square) -> Self {
-		Move {
-			from,
-			to: (to, piece),
-			clear_square: None,
-			rook_square: None,
-		}
-	}
-}
-
-impl ToString for Move {
-	fn to_string(&self) -> String {
-		format!(
+impl Debug for Move {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
 			"{}{}-{}{}",
 			FILES[self.from % 8],
 			self.from / 8 + 1,
@@ -111,11 +102,10 @@ impl SquareProperties for Square {
 	}
 }
 
-trait MyToString {
+trait ToString {
 	fn to_string(&self) -> String;
 }
-
-impl MyToString for Square {
+impl ToString for Square {
 	fn to_string(&self) -> String {
 		let symbol = if self.is_pawn() {
 			"p"
@@ -147,22 +137,26 @@ pub struct Chess {
 	pub check: Option<Color>,
 }
 
-impl ToString for Chess {
-	fn to_string(&self) -> String {
-		(0..8)
-			.rev()
-			.flat_map(|j| {
-				(0..8)
-					.map(move |i| {
-						if let Some(piece) = self.pieces.get(&(i + j * 8)) {
-							format!("{}", piece.features.to_string())
-						} else {
-							" ".into()
-						}
-					})
-					.chain(Some("\n".into()))
-			})
-			.collect()
+impl Display for Chess {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"{}",
+			(0..8)
+				.rev()
+				.flat_map(|j| {
+					(0..8)
+						.map(move |i| {
+							if let Some(piece) = self.pieces.get(&(i + j * 8)) {
+								piece.features.to_string()
+							} else {
+								" ".into()
+							}
+						})
+						.chain(Some("\n".into()))
+				})
+				.collect::<String>()
+		)
 	}
 }
 

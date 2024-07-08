@@ -31,11 +31,22 @@ macro_rules! remove_destination {
 }
 
 impl Chess {
-	pub fn update_pieces(&mut self, move_: &Move) -> Option<Result> {
-		let to_i = move_.to.0 as isize;
+	pub fn generate_semilegal_moves(&mut self) {
+		let piece_locations = self.pieces.keys().cloned().collect::<Vec<usize>>();
+		for i in piece_locations {
+			let piece_features = self.pieces[&i].features;
+			self.block_knights(i as isize, &piece_features);
+			self.block_sliders(i as isize, &piece_features);
+		}
+	}
+
+	pub fn make_move(&mut self, move_: &Move) -> Option<Result> {
+		let to_i = move_.to as isize;
+
+		println!("{:?}", move_.clear_square);
 
 		let mut piece = self.pieces.remove(&move_.from).unwrap();
-		let piece_features = move_.to.1;
+		let piece_features = move_.piece;
 		piece.destinations.clear();
 
 		// castling and en passant remove an extra piece
@@ -82,7 +93,7 @@ impl Chess {
 						let (mut target_x, mut target_y) = (blocked_x - dx, blocked_y - dy);
 						while (0..8).contains(&target_x) && (0..8).contains(&target_y) {
 							let target_i = (target_x + target_y * 8) as usize;
-							if target_i == move_.to.0 || Some(target_i) == move_.rook_square {
+							if target_i == move_.to || Some(target_i) == move_.rook_square {
 								break;
 							}
 							if let Some(target_piece) = self.pieces.get(&target_i) {
@@ -126,10 +137,8 @@ impl Chess {
 								if self.pieces.get(&(i - 8)).is_none() {
 									add_destination!(self.pieces, blocked_i, clear_i - 8);
 								}
-							} else {
 							}
-						} else if !same_color!(blocked_piece_features, piece_features)
-							&& (clear_x - blocked_x).abs() == 1
+						} else if (clear_x - blocked_x).abs() == 1
 							&& (clear_y - blocked_y).abs() == 1
 						{
 							remove_destination!(self.pieces, blocked_i, clear_i);
@@ -140,7 +149,8 @@ impl Chess {
 			}
 		}
 
-		self.pieces.insert(move_.to.0, piece);
+		self.pieces.insert(move_.to, piece);
+
 		// castling also places the removed piece (the rook)
 		if let Some(mut rook) = cleared_piece {
 			let rook_features = rook.features;
@@ -154,47 +164,138 @@ impl Chess {
 					.map(|&(dx, dy)| ((rook_x + dx) + (rook_y + dy) * 8) as usize)
 				{
 					if let Some(blocked_piece) = self.pieces.get_mut(&blocked_i) {
-						if blocked_piece.is_knight() && same_color!(blocked_piece, piece_features) {
-							blocked_piece.destinations.insert(i);
+						if blocked_piece.is_knight() && same_color!(blocked_piece, rook_features) {
+							remove_destination!(self.pieces, blocked_i, i);
 						}
 					}
 				}
 
-				self.block_sliders(rook_i, rook_features);
-			}
-		}
-
-		// TODO: check if castling is possible
-
-		let (to_x, to_y) = (to_i % 8, to_i / 8);
-		for (dx, dy) in KNIGHT_MOVES {
-			let (blocked_x, blocked_y) = (to_x + dx, to_y + dy);
-			if (0..8).contains(&blocked_x) && (0..8).contains(&blocked_y) {
-				let blocked_i = (blocked_x + blocked_y * 8) as usize;
-				if self.pieces.contains_key(&blocked_i) {
-					let blocked_piece_features = self.pieces[&blocked_i].features;
-					if same_color!(blocked_piece_features, piece_features) {
-						if blocked_piece_features.is_knight() {
-							remove_destination!(self.pieces, blocked_i, to_i);
+				let (x, y) = (rook_i % 8, rook_i / 8);
+				for (dx, dy) in DIRECTIONS {
+					let (mut blocked_x, mut blocked_y) = (x + dx, y + dy);
+					while (0..8).contains(&blocked_x) && (0..8).contains(&blocked_y) {
+						let blocked_i = (blocked_x + blocked_y * 8) as usize;
+						if !self.pieces.contains_key(&blocked_i) {
+							if dx * dy == 0 {
+								add_destination!(self.pieces, i, blocked_i);
+							}
+							blocked_x += dx;
+							blocked_y += dy;
+							continue;
 						}
-					} else if piece_features.is_king() && blocked_piece_features.is_knight() {
-						return Some(self.loss());
-					} else if piece_features.is_knight() {
-						add_destination!(self.pieces, to_i, blocked_i);
+
+						let blocked_piece_features = self.pieces[&blocked_i].features;
+						if dx * dy == 0 && !same_color!(piece_features, blocked_piece_features) {
+							add_destination!(self.pieces, i, blocked_i);
+							if blocked_piece_features.is_king() {
+								self.check = Some(if blocked_piece_features.is_white() {
+									WHITE
+								} else {
+									BLACK
+								})
+							}
+						}
+
+						if blocked_piece_features.is_queen()
+							|| if dx * dy == 0 {
+								blocked_piece_features.is_rook()
+							} else {
+								blocked_piece_features.is_bishop()
+							} {
+							if same_color!(blocked_piece_features, piece_features) {
+								remove_destination!(self.pieces, blocked_i, i);
+							} else {
+								add_destination!(self.pieces, blocked_i, i);
+								if piece_features.is_king() {
+									self.check = Some(if piece_features.is_white() {
+										WHITE
+									} else {
+										BLACK
+									})
+								}
+							}
+							let (mut target_x, mut target_y) = (x - dx, y - dy);
+							while (0..8).contains(&target_x)
+								&& (0..8).contains(&target_y) && remove_destination!(
+								self.pieces,
+								blocked_i,
+								target_x + target_y * 8
+							) {
+								target_x -= dx;
+								target_y -= dy;
+							}
+						} else if blocked_piece_features.is_king()
+							&& (blocked_x - x).abs() < 2 && (blocked_y - y).abs() < 2
+						{
+							if same_color!(blocked_piece_features, piece_features) {
+								remove_destination!(self.pieces, blocked_i, i);
+							} else {
+								add_destination!(self.pieces, blocked_i, i);
+								self.check = Some(if piece_features.is_white() {
+									WHITE
+								} else {
+									BLACK
+								})
+							}
+						} else if blocked_piece_features.is_pawn()
+							&& (blocked_piece_features.is_white() && blocked_y < y
+								|| blocked_piece_features.is_black() && blocked_y > y)
+						{
+							if x == blocked_x {
+								if (y - blocked_y).abs() == 1 {
+									remove_destination!(self.pieces, blocked_i, i - 8);
+									remove_destination!(self.pieces, blocked_i, i);
+									remove_destination!(self.pieces, blocked_i, i + 8);
+								} else if (y - blocked_y).abs() == 2
+									&& (blocked_y == 1 || blocked_y == 6)
+								{
+									remove_destination!(self.pieces, blocked_i, i);
+								}
+							} else if (x - blocked_x).abs() == 1 {
+								if (y - blocked_y).abs() == 1 {
+									if same_color!(blocked_piece_features, piece_features) {
+										remove_destination!(self.pieces, blocked_i, i);
+									} else {
+										add_destination!(self.pieces, blocked_i, i);
+										self.check = Some(if piece_features.is_white() {
+											WHITE
+										} else {
+											BLACK
+										})
+									}
+								}
+							}
+						}
+						break;
 					}
-				} else if piece_features.is_knight() {
-					add_destination!(self.pieces, to_i, blocked_i);
 				}
 			}
 		}
-		self.block_sliders(to_i, piece_features);
+
+		self.block_knights(to_i, &piece_features);
+		self.block_sliders(to_i, &piece_features);
+
+		self.move_counter += 1;
+
 		// en passantable pawn
-		//     if from_piece.is_pawn()
-		//     && !from_piece.same_color(blocked_piece)
-		//     && (from_i - blocked_i).abs() == 1
-		// {
-		//     blocked_piece.destinations.insert(to_i)
-		// }
+		if move_.piece.is_pawn() && move_.to.abs_diff(move_.from) == 16 {
+			if let Some(en_passanting_piece) = self.pieces.get_mut(&(move_.to - 1)) {
+				if move_.to % 8 != 0
+					&& en_passanting_piece.is_pawn()
+					&& !same_color!(move_.piece, en_passanting_piece)
+				{
+					en_passanting_piece.en_passant_right_turn = Some(self.move_counter);
+				}
+			}
+			if let Some(en_passanting_piece) = self.pieces.get_mut(&(move_.to + 1)) {
+				if move_.to % 8 != 7
+					&& en_passanting_piece.is_pawn()
+					&& !same_color!(move_.piece, en_passanting_piece)
+				{
+					en_passanting_piece.en_passant_left_turn = Some(self.move_counter);
+				}
+			}
+		}
 
 		self.to_play = if self.to_play.is_white() {
 			BLACK
@@ -205,12 +306,55 @@ impl Chess {
 	}
 
 	#[inline(always)]
-	fn block_knights(&mut self, i: isize, piece_features: [bool; 8]) -> Option<()> {
-		Some(())
+	fn block_knights(&mut self, i: isize, piece_features: &[bool; 8]) {
+		let (to_x, to_y) = (i % 8, i / 8);
+		for (dx, dy) in KNIGHT_MOVES {
+			let (blocked_x, blocked_y) = (to_x + dx, to_y + dy);
+			if !(0..8).contains(&blocked_x) || !(0..8).contains(&blocked_y) {
+				continue;
+			}
+
+			let blocked_i = (blocked_x + blocked_y * 8) as usize;
+			if let Some(blocked_piece) = self.pieces.get(&blocked_i) {
+				let blocked_piece_features = blocked_piece.features;
+
+				if blocked_piece_features.is_knight() {
+					if same_color!(piece_features, blocked_piece_features) {
+						remove_destination!(self.pieces, blocked_i, i);
+					} else {
+						add_destination!(self.pieces, blocked_i, i);
+
+						if piece_features.is_king() {
+							self.check = Some(if piece_features.is_white() {
+								WHITE
+							} else {
+								BLACK
+							});
+						}
+					}
+				}
+
+				if piece_features.is_knight()
+					&& !same_color!(piece_features, blocked_piece_features)
+				{
+					add_destination!(self.pieces, i, blocked_i);
+
+					if blocked_piece_features.is_king() {
+						self.check = Some(if blocked_piece_features.is_white() {
+							WHITE
+						} else {
+							BLACK
+						});
+					}
+				}
+			} else if piece_features.is_knight() {
+				add_destination!(self.pieces, i, blocked_i);
+			}
+		}
 	}
 
 	#[inline(always)]
-	fn block_sliders(&mut self, i: isize, piece_features: [bool; 8]) {
+	fn block_sliders(&mut self, i: isize, piece_features: &[bool; 8]) {
 		let (x, y) = (i % 8, i / 8);
 		for (dx, dy) in DIRECTIONS {
 			let (mut blocked_x, mut blocked_y) = (x + dx, y + dy);
@@ -226,8 +370,10 @@ impl Chess {
 						&& (x - blocked_x).abs() < 2
 						&& (y - blocked_y).abs() < 2
 						|| piece_features.is_pawn()
-							&& x == blocked_x && (piece_features.is_white() && y - blocked_y == -1
-							|| piece_features.is_black() && y - blocked_y == 1)
+							&& x == blocked_x && (piece_features.is_white()
+							&& (y - blocked_y == -1 || y == 1 && y - blocked_y == -2)
+							|| piece_features.is_black()
+								&& (y - blocked_y == 1 || y == 6 && y - blocked_y == 2))
 					{
 						add_destination!(self.pieces, i, blocked_i);
 					}
@@ -252,6 +398,13 @@ impl Chess {
 								|| piece_features.is_black() && y - blocked_y == 1))
 				{
 					add_destination!(self.pieces, i, blocked_i);
+					if blocked_piece_features.is_king() {
+						self.check = Some(if blocked_piece_features.is_white() {
+							WHITE
+						} else {
+							BLACK
+						})
+					}
 				}
 
 				if blocked_piece_features.is_queen()
@@ -262,6 +415,15 @@ impl Chess {
 					} {
 					if same_color!(blocked_piece_features, piece_features) {
 						remove_destination!(self.pieces, blocked_i, i);
+					} else {
+						add_destination!(self.pieces, blocked_i, i);
+						if piece_features.is_king() {
+							self.check = Some(if piece_features.is_white() {
+								WHITE
+							} else {
+								BLACK
+							})
+						}
 					}
 					let (mut target_x, mut target_y) = (x - dx, y - dy);
 					while (0..8).contains(&target_x)
@@ -274,9 +436,17 @@ impl Chess {
 				} else if blocked_piece_features.is_king()
 					&& (blocked_x - x).abs() < 2
 					&& (blocked_y - y).abs() < 2
-					&& same_color!(blocked_piece_features, piece_features)
 				{
-					remove_destination!(self.pieces, blocked_i, i);
+					if same_color!(blocked_piece_features, piece_features) {
+						remove_destination!(self.pieces, blocked_i, i);
+					} else {
+						add_destination!(self.pieces, blocked_i, i);
+						self.check = Some(if piece_features.is_white() {
+							WHITE
+						} else {
+							BLACK
+						})
+					}
 				} else if blocked_piece_features.is_pawn()
 					&& (blocked_piece_features.is_white() && blocked_y < y
 						|| blocked_piece_features.is_black() && blocked_y > y)
@@ -289,11 +459,19 @@ impl Chess {
 						} else if (y - blocked_y).abs() == 2 && (blocked_y == 1 || blocked_y == 6) {
 							remove_destination!(self.pieces, blocked_i, i);
 						}
-					} else if !same_color!(blocked_piece_features, piece_features)
-						&& (x - blocked_x).abs() == 1
-						&& (y - blocked_y).abs() == 1
-					{
-						add_destination!(self.pieces, blocked_i, i);
+					} else if (x - blocked_x).abs() == 1 {
+						if (y - blocked_y).abs() == 1 {
+							if same_color!(blocked_piece_features, piece_features) {
+								remove_destination!(self.pieces, blocked_i, i);
+							} else {
+								add_destination!(self.pieces, blocked_i, i);
+								self.check = Some(if piece_features.is_white() {
+									WHITE
+								} else {
+									BLACK
+								})
+							}
+						}
 					}
 				}
 				break;

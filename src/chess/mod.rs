@@ -1,13 +1,14 @@
 pub mod constants;
-mod moves;
+mod fen;
+mod move_list;
 mod update;
 
 use {
 	crate::network::constants::*,
-	constants::{pieces::*, *},
+	constants::pieces::*,
 	std::{
 		collections::{HashMap, HashSet},
-		fmt::{Debug, Display},
+		fmt::{self, Debug, Display},
 		iter::FromIterator,
 		vec,
 	},
@@ -24,6 +25,7 @@ macro_rules! same_color {
 	};
 }
 
+#[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum File {
 	A = 0,
@@ -42,11 +44,12 @@ pub fn square(file: File, rank: u8) -> usize {
 	(file as u8 + 8 * (rank - 1)).into()
 }
 
-const FILES: [char; 8] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+const FILES: [char; 8] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
 pub struct Move {
 	pub from: usize,
-	pub to: (usize, Square),
+	pub to: usize,
+	pub piece: Square,
 	pub clear_square: Option<usize>,
 	pub rook_square: Option<usize>,
 }
@@ -55,11 +58,24 @@ impl Debug for Move {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(
 			f,
-			"{}{}-{}{}",
+			"{}{}{}{}",
 			FILES[self.from % 8],
 			self.from / 8 + 1,
-			FILES[self.to.0 % 8],
-			self.to.0 / 8 + 1
+			FILES[self.to % 8],
+			self.to / 8 + 1
+		)
+	}
+}
+
+impl fmt::Display for Move {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(
+			f,
+			"{}{}{}{}",
+			FILES[self.from % 8],
+			self.from / 8 + 1,
+			FILES[self.to % 8],
+			self.to / 8 + 1
 		)
 	}
 }
@@ -135,6 +151,8 @@ pub struct Chess {
 	pub to_play: Color,
 	pub pieces: HashMap<usize, Piece>,
 	pub check: Option<Color>,
+	pub move_counter: usize,
+	pub fifty_move_counter: usize,
 }
 
 impl Display for Chess {
@@ -164,7 +182,7 @@ impl Display for Chess {
 pub enum Result {
 	WHITE,
 	BLACK,
-	DRAW,
+	// DRAW,
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -194,15 +212,15 @@ pub enum PieceType {
 }
 use PieceType::*;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Piece {
 	pub features: Square,
 	pub destinations: HashSet<usize>,
 	pub blocking: HashSet<usize>,
 	pub can_castle_long: bool,
 	pub can_castle_short: bool,
-	pub can_en_passant_left: bool,
-	pub can_en_passant_right: bool,
+	pub en_passant_left_turn: Option<usize>,
+	pub en_passant_right_turn: Option<usize>,
 }
 impl SquareProperties for Piece {
 	fn is_white(&self) -> bool {
@@ -243,8 +261,8 @@ impl Piece {
 			blocking: HashSet::new(),
 			can_castle_long: false,
 			can_castle_short: false,
-			can_en_passant_left: false,
-			can_en_passant_right: false,
+			en_passant_left_turn: None,
+			en_passant_right_turn: None,
 		}
 	}
 }
@@ -292,23 +310,13 @@ fn default_pieces() -> HashMap<usize, Piece> {
 }
 
 impl Chess {
-	pub fn new(pieces: Option<HashMap<usize, Piece>>) -> Self {
-		if let Some(pieces) = pieces {
-			let mut board = [[false; SQUARE_FEATURES]; BOARD_SIZE];
-			for (&location, piece) in &pieces {
-				board[location] = piece.features;
-			}
-			Self {
-				pieces,
-				to_play: WHITE,
-				check: None,
-			}
-		} else {
-			Self {
-				pieces: default_pieces(),
-				to_play: WHITE,
-				check: None,
-			}
+	pub fn new() -> Self {
+		Self {
+			pieces: default_pieces(),
+			to_play: WHITE,
+			check: None,
+			move_counter: 0,
+			fifty_move_counter: 0,
 		}
 	}
 }

@@ -52,19 +52,35 @@ fn dot(a: &[f32], b: &[f32]) -> f32 {
 }
 
 impl Network {
-	pub fn new() -> Self {
-		Self {
-			input: STARTING_BOARD,
-			nnue: Nnue {
-				weights: [[[0.0; SQUARE_FEATURES]; NNUE_OUTPUTS]; BOARD_SIZE],
-				biases: [0.0; NNUE_OUTPUTS],
-				output_cache: [0.0; NNUE_OUTPUTS],
-			},
-			fc1: FullyConnected {
-				weights: [[0.0; FC1_OUTPUTS]; NNUE_OUTPUTS],
-				biases: [0.0; FC1_OUTPUTS],
-			},
-			win_evaluation: [0.0; FC1_OUTPUTS],
+	pub fn new(randomize: bool) -> Self {
+		if randomize {
+			Self {
+				input: STARTING_BOARD,
+				nnue: Nnue {
+					weights: [[[rand::random(); SQUARE_FEATURES]; NNUE_OUTPUTS]; BOARD_SIZE],
+					biases: [rand::random(); NNUE_OUTPUTS],
+					output_cache: [rand::random(); NNUE_OUTPUTS],
+				},
+				fc1: FullyConnected {
+					weights: [[rand::random(); FC1_OUTPUTS]; NNUE_OUTPUTS],
+					biases: [rand::random(); FC1_OUTPUTS],
+				},
+				win_evaluation: [rand::random(); FC1_OUTPUTS],
+			}
+		} else {
+			Self {
+				input: STARTING_BOARD,
+				nnue: Nnue {
+					weights: [[[0.0; SQUARE_FEATURES]; NNUE_OUTPUTS]; BOARD_SIZE],
+					biases: [0.0; NNUE_OUTPUTS],
+					output_cache: [0.0; NNUE_OUTPUTS],
+				},
+				fc1: FullyConnected {
+					weights: [[0.0; FC1_OUTPUTS]; NNUE_OUTPUTS],
+					biases: [0.0; FC1_OUTPUTS],
+				},
+				win_evaluation: [0.0; FC1_OUTPUTS],
+			}
 		}
 	}
 
@@ -77,14 +93,11 @@ impl Network {
 			None
 		};
 
-		let evaluation = self
-			.fc1
-			.weights
-			.iter()
+		let evaluation = (self.fc1.weights.iter())
 			.zip(self.fc1.biases.iter())
 			.zip(self.win_evaluation.iter())
-			.fold(0.0, |evaluation, ((input, bias), weight)| {
-				evaluation + relu(dot(input, &self.nnue.output_cache) + bias) * weight
+			.fold(0.0, |evaluation, ((weights, bias), weight)| {
+				evaluation + relu(dot(&self.nnue.output_cache, weights) + bias) * weight
 			});
 
 		if let Some(old_cache) = old_cache {
@@ -95,7 +108,7 @@ impl Network {
 	}
 
 	pub fn move_evaluations(&mut self, game: &Chess) -> Vec<(f32, Move)> {
-		game.moves()
+		game.move_list()
 			.into_iter()
 			.map(|move_| (self.evaluate(Some(&move_)), move_))
 			.collect()
@@ -113,19 +126,19 @@ impl Network {
 		let W = self.nnue.weights;
 		let B = self.nnue.biases;
 		let i_from = move_.from;
-		let i_to = move_.to.0;
+		let i_to = move_.to;
 
 		for i in 0..NNUE_OUTPUTS {
 			self.nnue.output_cache[i] += (relu(B[i_from])
 				- relu(bool_dot(&A[i_from], &W[i_from][i]) + B[i_from]))
-				+ (relu(bool_dot(&move_.to.1, &W[i_to][i]) + B[i_to])
+				+ (relu(bool_dot(&move_.piece, &W[i_to][i]) + B[i_to])
 					- relu(bool_dot(&A[i_to], &W[i_to][i]) + B[i_to]));
 			if let Some(i_clear) = move_.clear_square {
 				self.nnue.output_cache[i] +=
 					relu(B[i_clear]) - relu(bool_dot(&A[i_clear], &W[i_clear][i]) + B[i_clear])
 			}
 			if let Some(i_rook) = move_.rook_square {
-				let rook = if move_.to.1.is_white() {
+				let rook = if move_.piece.is_white() {
 					WHITE_ROOK
 				} else {
 					BLACK_ROOK
